@@ -1,0 +1,61 @@
+---
+title: "About Me"
+description: |
+  Learn more about my background and interests
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Background
+
+I'm a Third year student at The University of Essex studying Economics and Politics. My academic interests center on using quantitative methods to understand political and social phenomena.
+
+## Skills & Tools
+
+Through my coursework in GV300 and other classes, I've developed proficiency in:
+
+### Programming & Analysis
+- **R**: Data wrangling (tidyverse), visualization (ggplot2), statistical modeling
+- **RStudio**: Reproducible research with R Markdown
+- **Git & GitHub**: Version control and collaborative coding
+
+### Statistical Methods
+- Descriptive statistics and exploratory data analysis
+- Linear and logistic regression
+- Causal inference and experimental design
+- A/B testing and treatment effect estimation
+
+### Data Visualization
+- Creating publication-quality graphics
+- Designing clear, effective visualizations for different audiences
+- Communicating complex findings through visual storytelling
+
+## Academic Interests
+
+My main areas of interest include:
+
+- **Political Behavior**: Understanding voter turnout, political participation, and electoral systems
+- **Causal Inference**: Identifying causal relationships in observational and experimental data
+- **Data Communication**: Making quantitative research accessible to broader audiences
+- **Research Methods**: Developing rigorous approaches to studying political and social questions
+
+## Projects
+
+Visit my [**GV300 Showcase**](gv300-showcase.html) to see examples of my analytical work, including:
+
+- Exploratory data analysis of UK election turnout patterns
+- Experimental design and A/B testing for political communications
+- Data visualization projects telling stories about social inequality
+
+## Contact
+
+Feel free to reach out if you'd like to discuss research, data analysis, or potential collaborations:
+
+- **Email**: er23255@essex.ac.uk
+- **GitHub**: (https://github.com/erahemzadh)
+- **LinkedIn**: www.linkedin.com/in/eiliya-rahemzadh-222867206
+---
+
+*Last updated: `r format(Sys.Date(), '%B %d, %Y')`*

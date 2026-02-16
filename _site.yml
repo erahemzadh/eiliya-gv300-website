@@ -1,0 +1,19 @@
+name: "eiliya-gv300-website"
+title: "Eiliya Rahemzadh"
+description: |
+  Personal website showcasing my work in data analysis and visualization
+base_url: https://erahemzadh.github.io/eiliya-gv300-website
+navbar:
+  right:
+    - text: "Home"
+      href: index.html
+    - text: "About"
+      href: about.html
+    - text: "GV300 Showcase"
+      href: gv300-showcase.html
+  logo: 
+    image: # Optional: add path to logo image
+    href: index.html
+output: 
+  distill::distill_article:
+    theme: theme.css
