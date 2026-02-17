@@ -55,7 +55,7 @@ Feel free to reach out if you'd like to discuss research, data analysis, or pote
 
 - **Email**: er23255@essex.ac.uk
 - **GitHub**: (https://github.com/erahemzadh)
-- **LinkedIn**: www.linkedin.com/in/eiliya-rahemzadh-222867206
+- **LinkedIn**: https://www.linkedin.com/in/eiliya-rahemzadh-222867206
 ---
 
 *Last updated: `r format(Sys.Date(), '%B %d, %Y')`*
