@@ -437,7 +437,7 @@ The intergenerational advantage project was particularly impactful because it sh
 
 # Code Repository
 
-All code for these projects is available in my [GV300 GitHub repository](https://github.com/your-username/gv300-assignments).
+All code for these projects is available in my [GV300 GitHub repository](https://github.com/erahemzadh/eiliya-gv300-website).
 
 Each assignment includes:
 - Raw data files (where shareable)
