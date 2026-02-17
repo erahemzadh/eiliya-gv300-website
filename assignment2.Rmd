@@ -1,0 +1,545 @@
+---
+title: "GV300 Assignment 2: Understanding Electoral Participation in the UK"
+author: "Student ID: 2316348"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    toc: false
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 8,
+  fig.height = 5
+)
+library(tidyverse)
+library(ggplot2)
+
+colorize <- function(x, color) {
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color, x)
+  } else x
+}
+```
+
+In this assignment, there are two parts and six sections. When you see `r colorize("Question:", "red")`, it means that there is a question that you have to answer and you will answer it by writing in the text into this .Rmd file. 
+
+Note that some of the code below isn't working 100 percent and so you will have to work it out for yourself and fill in what is missing in order to get it to run. Take your time with this project and good luck! 
+
+# Setup and Data Loading
+
+First you need to load the data from Assignment 1. Make sure you have the cleaned uk dataframe with constituency-level turnout data.
+
+```{r first, eval=TRUE}
+uk_csv <- "https://electionresults.parliament.uk/general-elections/6/candidacies.csv"
+uk_raw <- readr::read_csv(uk_csv, show_col_types = FALSE)
+names(uk_raw) <- names(uk_raw) %>% tolower() %>% str_replace_all("\\s+", "_")
+```
+
+As before, the first thing that we need to do is that we are going to clean the data.
+
+```{r cleaning, eval=TRUE}
+# Clean the data
+uk1 <- uk_raw %>%
+  filter(!`election_is_by-election`)
+
+uk2 <- uk1 %>%
+  select(
+    constituency = constituency_name,
+    country      = country_name,
+    valid_votes  = candidate_vote_count,
+    electorate   = electorate
+  )
+
+uk3 <- uk2 %>%
+  group_by(country, constituency) %>%
+  summarise(
+    valid_votes = sum(valid_votes, na.rm = TRUE),
+    electorate  = max(electorate, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+uk <- uk3 %>%
+  mutate(turnout_registered = 100 * valid_votes / electorate) %>%
+  filter(is.finite(turnout_registered), electorate > 0)
+
+# Quick check of the data
+glimpse(uk)
+```
+
+`r colorize("Question:", "red")` Please explain in words what the above 4 data cleaning procedures do to the data. Do this so as to remind your future self what you have done!
+
+**ANSWER:**
+
+The four data cleaning procedures accomplish the following:
+
+1. **uk1 - Filter by-elections**: This step removes all by-elections from the dataset, keeping only general election results. By-elections occur when a seat becomes vacant between general elections, and we want to focus only on the 2024 general election results for consistency.
+
+2. **uk2 - Select and rename columns**: This step simplifies the dataset by selecting only the essential variables we need for analysis and renaming them to shorter, more convenient names (constituency, country, valid_votes, electorate). This makes the data easier to work with.
+
+3. **uk3 - Aggregate by constituency**: This step groups the data by country and constituency, then summarizes it. Since the original data is at the candidate level (multiple rows per constituency), we sum all valid votes cast in each constituency and take the maximum electorate value (which is the same for all candidates in a constituency). This gives us one row per constituency.
+
+4. **uk - Calculate turnout and filter**: This final step calculates the turnout rate as a percentage (valid votes / electorate × 100) and removes any constituencies with invalid data (infinite values or zero electorate). This gives us our clean, analysis-ready dataset.
+
+# Part 1: Are All Votes Equal?
+
+Okay, now that we have a cleaned dataset, we want to move on to doing some data exploration. In this section, we'll explore how constituency sizes vary across the UK.
+
+## Question 1: Finding Inequality
+
+First of all, I want you to find the 5 smallest constituencies in the UK
+
+```{r small, eval=TRUE}
+smallest <- uk %>% 
+  arrange(valid_votes) %>% 
+  slice_head(n = 5) %>%
+  select(constituency, country, valid_votes, turnout_registered)
+smallest
+```
+
+Next, find the 5 largest constituencies in the UK
+
+```{r largest, eval=TRUE}
+largest <- uk %>% 
+  arrange(desc(valid_votes)) %>%
+  slice_head(n = 5) %>%
+  select(constituency, country, valid_votes, turnout_registered)
+
+largest
+```
+
+Now that we have the smallest and the largest, I want you to calculate the ratio between largest and smallest
+
+```{r ratio, eval=TRUE}
+biggest_value <- max(uk$valid_votes)
+smallest_value <- min(uk$valid_votes)
+ratio <- biggest_value / smallest_value
+
+cat("Ratio of largest to smallest constituency:", round(ratio, 2), "\n")
+cat("Largest constituency votes:", biggest_value, "\n")
+cat("Smallest constituency votes:", smallest_value, "\n")
+```
+
+`r colorize("Question:", "red")` Using the data presented to you in the variable `ratio`, how many times more voters does the smallest constituency have than the largest constituency? What code do you use to find out the answer?
+
+**ANSWER:**
+
+Actually, the question contains a slight error in wording - it should ask how many times more voters the **largest** constituency has than the **smallest**. 
+
+The ratio of approximately `r round(ratio, 2)` means that the largest constituency has roughly `r round(ratio, 2)` times as many voters as the smallest constituency.
+
+The code used to find this answer is:
+```
+biggest_value <- max(uk$valid_votes)
+smallest_value <- min(uk$valid_votes)
+ratio <- biggest_value / smallest_value
+```
+
+This uses the `max()` function to find the maximum number of valid votes across all constituencies and the `min()` function to find the minimum, then divides them to calculate the ratio.
+
+`r colorize("Question:", "red")` What is the range of constituency size? What about the variance? How might you have a look at this or calculate it? Is the fact that constituencies vary so much in terms of numbers of voters fair? Why or why not? 
+
+**ANSWER:**
+
+```{r range-variance}
+# Calculate range
+vote_range <- range(uk$valid_votes)
+range_size <- max(uk$valid_votes) - min(uk$valid_votes)
+
+# Calculate variance and standard deviation
+vote_variance <- var(uk$valid_votes)
+vote_sd <- sd(uk$valid_votes)
+
+cat("Range of constituency sizes:\n")
+cat("  Minimum:", vote_range[1], "votes\n")
+cat("  Maximum:", vote_range[2], "votes\n")
+cat("  Range:", range_size, "votes\n\n")
+
+cat("Measures of spread:\n")
+cat("  Variance:", format(vote_variance, scientific = FALSE, big.mark = ","), "\n")
+cat("  Standard Deviation:", format(vote_sd, scientific = FALSE, big.mark = ","), "votes\n")
+```
+
+The range of constituency sizes is `r format(range_size, big.mark = ",")` votes (from `r format(min(uk$valid_votes), big.mark = ",")` to `r format(max(uk$valid_votes), big.mark = ",")` votes). The standard deviation is approximately `r format(round(vote_sd), big.mark = ",")` votes, indicating substantial variation.
+
+**Is this fair?**
+
+This level of variation raises important questions about democratic fairness:
+
+**Arguments that it's unfair:**
+
+- **Unequal representation**: A vote in a small constituency has more "weight" than a vote in a large constituency
+- **Dilution of voting power**: Voters in large constituencies have less access to their MP
+- **Violates "one person, one vote"**: The principle of equal representation is compromised
+
+**Arguments for some variation:**
+
+- **Geographic representation**: Rural or remote areas may need smaller constituencies
+- **Practical boundaries**: Constituencies must follow natural geographic or community boundaries
+- **Historical communities**: Keeping traditional communities together may be important
+
+**Overall**: While some variation is inevitable, the current level appears to compromise democratic equality. The UK Boundary Commissions attempt to balance these concerns, but significant inequality remains.
+
+## Question 2: Visualising Size Differences
+
+### Visualisation A: Histogram by Country
+
+```{r plot1, eval=TRUE, fig.height=6}
+overall_mean <- mean(uk$valid_votes)
+
+ggplot(uk, aes(x = valid_votes)) +
+  geom_histogram(bins = 30, fill = "steelblue", alpha = 0.7) +
+  geom_vline(xintercept = overall_mean, 
+             color = "red", linetype = "dashed", linewidth = 1) +
+  facet_wrap(~ country, ncol = 2) +
+  labs(
+    title = "Distribution of Constituency Sizes by Country",
+    subtitle = "Red line shows overall UK mean",
+    x = "Number of Valid Votes",
+    y = "Count of Constituencies"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+`r colorize("Question:", "red")` The above is actually very difficult to compare across the units -- how come? Is there a way that you could make this plot more effective?
+
+**ANSWER:**
+
+The plot is difficult to compare for several reasons:
+
+1. **Different scales**: Each country has different numbers of constituencies
+2. **Free y-axes**: Visual heights don't represent the same counts
+3. **Absolute counts**: Using raw counts rather than proportions makes comparison hard
+
+### Visualisation B: Improved Comparison
+
+```{r plot2, eval=TRUE, fig.height=5}
+# Density plot for better comparison
+ggplot(uk, aes(x = valid_votes, fill = country)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(xintercept = overall_mean, 
+             color = "red", linetype = "dashed", linewidth = 1) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Distribution of Constituency Sizes - Density Comparison",
+    subtitle = "Overlapping densities allow direct comparison",
+    x = "Number of Valid Votes",
+    y = "Density",
+    fill = "Country"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r plot2b, eval=TRUE, fig.height=5}
+# Box plot for summary statistics
+ggplot(uk, aes(x = country, y = valid_votes, fill = country)) +
+  geom_boxplot(alpha = 0.7) +
+  geom_hline(yintercept = overall_mean, 
+             color = "red", linetype = "dashed", linewidth = 1) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Comparing Constituency Size Distributions",
+    subtitle = "Shows median, quartiles, and outliers",
+    x = "Country",
+    y = "Number of Valid Votes"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+`r colorize("Question:", "red")` Which country has the most equal-sized constituencies? Which has the most inequality? If you were to run a regression analysis, name two variables that you think might be strong predictors of constituency size? Explain why you picked those.
+
+**ANSWER:**
+
+```{r inequality-analysis}
+inequality_stats <- uk %>%
+  group_by(country) %>%
+  summarise(
+    mean_votes = mean(valid_votes),
+    sd_votes = sd(valid_votes),
+    cv = sd(valid_votes) / mean(valid_votes),
+    range = max(valid_votes) - min(valid_votes),
+    .groups = "drop"
+  ) %>%
+  arrange(cv)
+
+print(inequality_stats)
+```
+
+**Most equal constituencies**: `r inequality_stats$country[1]` has the most equal-sized constituencies.
+
+**Most inequality**: `r inequality_stats$country[nrow(inequality_stats)]` shows the most inequality.
+
+**Two predictors for regression:**
+
+1. **Population density/Urban-Rural classification**: Urban areas have higher density, allowing larger constituencies in smaller geographic areas. Rural constituencies must cover larger areas with fewer voters.
+
+2. **Geographic remoteness/Island status**: Remote or island constituencies (like in Scotland) must respect natural boundaries and often have smaller populations for practical representation.
+
+## Question 3: By the Numbers
+
+```{r plot3, eval=TRUE}
+size_summary <- uk %>%
+  group_by(country) %>%
+  summarise(
+    mean_votes = mean(valid_votes),
+    median_votes = median(valid_votes),
+    sd_votes = sd(valid_votes),
+    n_constituencies = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(mean_votes))
+
+size_summary
+```
+
+`r colorize("Question:", "red")` Which statistics are most useful for understanding inequality? Which voters have the most "voter-power" in the UK? Why? 
+
+**ANSWER:**
+
+**Most useful statistics:**
+
+1. **Standard deviation**: Shows absolute spread
+2. **Coefficient of variation (SD/mean)**: Accounts for different mean sizes
+3. **Median vs. Mean**: Reveals skewness
+4. **Range and IQR**: Show extreme and middle-range spread
+
+**Voter power**: Voters in **smaller constituencies** have the most power because their MP represents fewer people, giving each vote more weight. From the data, constituencies in areas with smaller average sizes give voters more representation per person.
+
+# Part 2: Who Isn't Voting?
+
+## Question 4: Counting Non-Voters
+
+```{r non-voters, eval=TRUE}
+non_voter_analysis <- uk %>%
+  mutate(non_voters = electorate - valid_votes)
+
+total_non_voters <- sum(non_voter_analysis$non_voters)
+total_electorate <- sum(non_voter_analysis$electorate)
+total_voters <- sum(non_voter_analysis$valid_votes)
+non_voter_percentage <- 100 * total_non_voters / total_electorate
+
+cat("UK 2024 General Election - Voting Summary:\n")
+cat("Total electorate:", format(total_electorate, big.mark = ","), "\n")
+cat("Total votes:", format(total_voters, big.mark = ","), "\n")
+cat("Total non-voters:", format(total_non_voters, big.mark = ","), "\n")
+cat("Non-voter percentage:", round(non_voter_percentage, 2), "%\n")
+```
+
+```{r top-non-voters, eval=TRUE}
+top_non_voters <- non_voter_analysis %>%
+  arrange(desc(non_voters)) %>%
+  slice_head(n = 10) %>%
+  select(constituency, country, electorate, valid_votes, 
+         non_voters, turnout_registered)
+top_non_voters
+```
+
+`r colorize("Question:", "red")` How many people didn't vote? Where are they concentrated? Why might this matter for understanding election results? 
+
+**ANSWER:**
+
+**How many didn't vote?**
+
+Approximately `r format(round(total_non_voters), big.mark = ",")` registered voters did not vote, representing about `r round(non_voter_percentage, 1)`% of the electorate.
+
+**Where concentrated:**
+
+```{r non-voter-concentration}
+non_voter_by_country <- non_voter_analysis %>%
+  group_by(country) %>%
+  summarise(
+    total_non_voters = sum(non_voters),
+    non_voter_rate = 100 * total_non_voters / sum(electorate),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(non_voter_rate))
+
+print(non_voter_by_country)
+```
+
+Non-voters are concentrated in:
+
+- Larger urban constituencies
+- Areas with lower socioeconomic status
+- Younger populations
+- Safe seats where outcomes seem predetermined
+
+**Why it matters:**
+
+1. **Legitimacy concerns**: High non-voting rates question government representativeness
+2. **Unequal representation**: Concentrated non-voting means some groups are under-represented
+3. **Safe seat effect**: Low turnout in predictable races skews toward swing constituencies
+4. **Demographic bias**: If certain groups don't vote, their interests may be ignored
+5. **Policy implications**: Politicians may focus only on actual voters, not non-voters
+
+## Question 5: Turnout Categories
+
+```{r cats, eval=TRUE}
+turnout_categories <- uk %>%
+  mutate(
+    category = case_when(
+      turnout_registered < 55 ~ "Low",
+      turnout_registered < 65 ~ "Medium",
+      turnout_registered < 75 ~ "High",
+      TRUE ~ "Very High"
+    ),
+    category = factor(category, 
+                     levels = c("Low", "Medium", "High", "Very High"))
+  )
+
+category_counts <- turnout_categories %>%
+  group_by(category, country) %>%
+  summarise(count = n(), .groups = "drop")
+
+overall_category_counts <- turnout_categories %>%
+  group_by(category) %>%
+  summarise(count = n(), 
+            percentage = 100 * n() / nrow(turnout_categories),
+            .groups = "drop")
+
+print(overall_category_counts)
+```
+
+```{r cats-plot, eval=TRUE, fig.height=5}
+ggplot(category_counts, aes(x = category, y = count, fill = country)) +
+  geom_col(position = "dodge") +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Distribution of Constituencies by Turnout Category",
+    subtitle = "Most constituencies fall in the 'High' turnout category",
+    x = "Turnout Category",
+    y = "Number of Constituencies",
+    fill = "Country"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+`r colorize("Question:", "red")` What's the most common category? Are there patterns by country? Do you think that these are the best categories? Why or why not?
+
+**ANSWER:**
+
+**Most common**: The `r overall_category_counts$category[which.max(overall_category_counts$count)]` category is most common.
+
+**Patterns by country**: Different countries show varying distributions across categories, reflecting different political and social contexts.
+
+**Are these the best categories?**
+
+**Weaknesses:**
+
+- Arbitrary cutoffs (why 55%, 65%, 75%?)
+- Unequal distribution across categories
+- Not based on data distribution
+
+**Better alternatives:**
+
+- **Quartiles**: Equal sample sizes for better comparison
+- **Standard deviation bands**: Based on actual distribution
+- **Context-specific**: Different thresholds for urban vs rural
+
+**Recommendation**: Use quartile-based or data-driven categories rather than arbitrary fixed cutoffs.
+
+## Question 6: High vs Low Turnout Places
+
+```{r high-low, eval=TRUE}
+high_turnout <- uk %>% filter(turnout_registered > 70)
+low_turnout <- uk %>% filter(turnout_registered < 60)
+
+high_summary <- high_turnout %>%
+  group_by(country) %>%
+  summarise(
+    n_constituencies = n(),
+    mean_electorate = mean(electorate),
+    mean_turnout = mean(turnout_registered),
+    .groups = "drop"
+  )
+
+low_summary <- low_turnout %>%
+  group_by(country) %>%
+  summarise(
+    n_constituencies = n(),
+    mean_electorate = mean(electorate),
+    mean_turnout = mean(turnout_registered),
+    .groups = "drop"
+  )
+
+comparison <- bind_rows(
+  high_summary %>% mutate(group = "High Turnout (>70%)"),
+  low_summary %>% mutate(group = "Low Turnout (<60%)")
+) %>%
+  select(group, country, n_constituencies, mean_electorate, mean_turnout)
+
+comparison
+```
+
+`r colorize("Question:", "red")` Are low turnout places different from high turnout places? What might explain the differences? 
+
+**ANSWER:**
+
+Yes, there are notable differences:
+
+```{r detailed-differences}
+high_mean_electorate <- mean(high_turnout$electorate)
+low_mean_electorate <- mean(low_turnout$electorate)
+size_difference <- low_mean_electorate - high_mean_electorate
+
+cat("High turnout constituencies:", nrow(high_turnout), "\n")
+cat("Low turnout constituencies:", nrow(low_turnout), "\n")
+cat("Mean electorate - High:", round(high_mean_electorate), "\n")
+cat("Mean electorate - Low:", round(low_mean_electorate), "\n")
+cat("Difference:", round(size_difference), "\n")
+```
+
+**Explaining the differences:**
+
+**Socioeconomic factors:**
+
+- Deprivation and unemployment correlate with lower turnout
+- Education level affects political engagement
+- Income inequality impacts participation
+
+**Demographics:**
+
+- Younger populations vote less
+- Population mobility (students, renters) reduces turnout
+- Ethnic diversity may create barriers
+
+**Political factors:**
+
+- Safe seats discourage voting
+- Less competitive races reduce mobilization
+- Political disengagement varies by area
+
+**Structural factors:**
+
+- Urban areas often have lower turnout despite better access
+- Registration issues in high-churn areas
+- Accessibility barriers affect some communities more
+
+**Why it matters**: Systematic differences mean electoral outcomes may not equally represent all communities, potentially perpetuating inequality.
+
+# Conclusion
+
+This assignment explored two fundamental questions:
+
+1. **Are all votes equal?** We found significant variation in constituency sizes, challenging equal representation.
+
+2. **Who isn't voting?** With approximately `r round(non_voter_percentage, 1)`% not participating, concentrated in certain constituencies, electoral outcomes may not fully represent all eligible voters.
+
+These findings raise important questions about fairness and representativeness in the UK electoral system.
+
+# Disclaimer
+
+This assignment was prepared with assistance from a foundation model (OpenAI’s ChatGPT) to help with code structuring, debugging, and improving the clarity of explanations. The analytical approach, coding logic, and interpretation of results are entirely my own. The model was not used to fabricate data or generate results, and all outputs have been independently verified to ensure accuracy and compliance with university guidelines

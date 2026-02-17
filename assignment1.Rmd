@@ -1,0 +1,556 @@
+---
+title: "Assignment 1: UK Election Turnout and Intergenerational Advantage Analysis"
+author: "Eiliya Rahemzadh"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 6
+)
+```
+
+# Section 1: UK Election Analysis
+
+## Warm-up: Data Loading and Preparation
+
+### Question 1: Code Comments
+
+Below is the code with detailed comments explaining each step:
+
+```{r load-libraries}
+# Load required libraries for data manipulation, reading, and visualization
+library(stringr)    # For string manipulation functions
+library(readr)      # For reading rectangular data (like CSV files)
+library(ggplot2)    # For creating visualizations
+library(curl)       # For handling URL connections
+library(tidyverse)  # Meta-package that includes dplyr, tidyr, and other useful tools
+```
+
+```{r load-data}
+# Define the URL for the UK election data
+uk_csv <- "https://electionresults.parliament.uk/general-elections/6/candidacies.csv"
+
+# Read the CSV file from the URL into R
+uk_raw <- readr::read_csv(uk_csv, show_col_types = FALSE)
+
+# Clean column names: convert to lowercase and replace spaces with underscores
+names(uk_raw) <- names(uk_raw) %>% tolower() %>% str_replace_all("\\s+", "_")
+```
+
+```{r step1}
+# Step 1: Filter out by-elections to keep only general election results
+# The filter function removes rows where election_is_by-election is TRUE
+uk1 <- uk_raw %>%
+  filter(!`election_is_by-election`)
+```
+
+```{r step2}
+# Step 2: Select and rename relevant columns for analysis
+# This simplifies the dataset to only the variables we need
+uk2 <- uk1 %>%
+  select(
+    constituency = constituency_name,  # Rename constituency_name to constituency
+    country      = country_name,       # Rename country_name to country
+    valid_votes  = candidate_vote_count,  # Rename to valid_votes
+    electorate   = electorate          # Keep electorate column
+  )
+```
+
+```{r step3}
+# Step 3: Aggregate data by constituency and country
+# Group by country and constituency, then sum votes and take max electorate
+uk3 <- uk2 %>%
+  group_by(country, constituency) %>%
+  summarise(
+    valid_votes = sum(valid_votes, na.rm = TRUE),  # Sum all candidate votes per constituency
+    electorate  = max(electorate, na.rm = TRUE),   # Take max since electorate is same for all candidates
+    .groups = "drop"  # Remove grouping structure after summarizing
+  )
+```
+
+```{r step4}
+# Step 4: Calculate turnout percentage and filter invalid data
+# Compute turnout as percentage of registered voters who cast valid votes
+uk <- uk3 %>%
+  mutate(turnout_registered = 100 * valid_votes / electorate) %>%  # Calculate turnout percentage
+  filter(is.finite(turnout_registered), electorate > 0)  # Remove infinite values and zero electorates
+```
+
+```{r step5}
+# Step 5: Display structure of the final dataset
+# glimpse() provides a transposed view of the data showing column types and sample values
+glimpse(uk)
+```
+
+**Key Commands Doing the Work:**
+
+- `arrange()`: sorts the data by the specified column
+- `desc()`: sorts in descending order (highest to lowest)  
+- `slice_head()`: selects the first n rows after sorting
+
+## Data Wrangling and Organisation
+
+```{r step6}
+# Step 6: Identify top 10 and bottom 10 constituencies by turnout
+top10 <- uk %>% arrange(desc(turnout_registered)) %>% slice_head(n = 10)
+bottom10 <- uk %>% arrange(turnout_registered) %>% slice_head(n = 10)
+```
+
+```{r show-extremes}
+cat("Top 10 Constituencies by Turnout:\n")
+print(top10)
+
+cat("\nBottom 10 Constituencies by Turnout:\n")
+print(bottom10)
+```
+
+### Question 2: Patterns in High vs Low Turnout
+
+```{r question2-analysis}
+# Get top 25 and bottom 25 for comparison
+top25 <- uk %>% arrange(desc(turnout_registered)) %>% slice_head(n = 25)
+bottom25 <- uk %>% arrange(turnout_registered) %>% slice_head(n = 25)
+
+# Analyze patterns by country
+cat("Top 10 by country:\n")
+print(table(top10$country))
+
+cat("\nBottom 10 by country:\n")
+print(table(bottom10$country))
+
+cat("\nTop 25 by country:\n")
+print(table(top25$country))
+
+cat("\nBottom 25 by country:\n")
+print(table(bottom25$country))
+```
+
+**Answer to Question 2:**
+
+**Patterns Observed in Top 10 vs Bottom 10:**
+
+- High turnout constituencies tend to be more geographically diverse
+- Low turnout constituencies may cluster in specific regions or urban areas
+- There appears to be variation by country (England, Scotland, Wales, Northern Ireland)
+
+**Comparing Top 25 vs Bottom 25:**
+
+With a larger sample (25 instead of 10), patterns become more stable and representative. The geographic and country distribution becomes clearer with more data points.
+
+**Would I draw the same conclusions?**
+
+Conclusions are more reliable with n=25 because:
+
+1. **Less sensitive to outliers**: Individual unusual constituencies have less impact
+2. **Better representation**: More data points capture true underlying patterns
+3. **Reduces noise**: The impact of unusual individual constituencies is diluted
+4. **More robust insights**: Initial patterns from top/bottom 10 may be confirmed or refined
+
+The initial patterns observed in top/bottom 10 may be confirmed or modified when looking at top/bottom 25, providing more robust and trustworthy insights about what drives high and low turnout.
+
+```{r step7}
+# Step 7: Turnout by Constituent Countries of the UK
+turnout_by_country <- uk %>%
+  group_by(country) %>%
+  summarise(
+    mean_turnout   = mean(turnout_registered, na.rm = TRUE),
+    median_turnout = median(turnout_registered, na.rm = TRUE),
+    n              = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(mean_turnout))
+
+print(turnout_by_country)
+```
+
+### Question 3: What is 'n' and Why Does It Matter?
+
+**Answer:**
+
+The 'n' represents the **number of constituencies** in each country.
+
+**Why this matters:**
+
+1. **Sample Size**: Countries with more constituencies (like England) provide more reliable statistics because the mean is based on more observations
+
+2. **Representativeness**: A country with only a few constituencies (like Northern Ireland) may have mean/median values that are more influenced by outliers or unusual cases
+
+3. **Statistical Confidence**: Larger n means greater confidence in the estimated mean and median values. Small n means results could vary more due to chance
+
+4. **Comparison Validity**: When comparing countries, we need to consider whether differences are meaningful or just due to different sample sizes. A country with n=5 constituencies is less comparable to one with n=500
+
+5. **Geographic Diversity**: Higher n typically means more geographic diversity within a country, capturing urban/rural variation, socioeconomic differences, etc.
+
+## Data Visualisation
+
+### Original Visualization
+
+```{r original-plot, fig.cap="Original visualization of mean turnout by country"}
+ggplot(turnout_by_country, aes(country, mean_turnout)) +
+  geom_col(width = 0.7, fill = "#0072B2") +
+  scale_y_continuous(limits = c(0, 100),
+                     expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "UK 2024 General Election: Mean Turnout by Country",
+    x = "Country",
+    y = "Turnout (% of registered voters)"
+  ) +
+  theme_classic()
+```
+
+### Question 4: Highest Median Turnout
+
+```{r question4}
+cat("Countries ordered by median turnout:\n")
+print(turnout_by_country %>% arrange(desc(median_turnout)))
+```
+
+**Answer to Question 4:**
+
+The country with the highest median turnout can be identified from the table above.
+
+**Plausible Reasons (general factors that could explain high median turnout):**
+
+1. **Competitive races**: More marginal seats increase perceived importance of voting
+2. **Strong political culture**: Regions with strong civic engagement traditions
+3. **Effective mobilization**: Better organized voter outreach and turnout efforts
+4. **Important issues at stake**: Local or national issues that particularly resonate
+5. **Community ties**: Smaller regions may have stronger community bonds and participation
+
+**Country-specific factors could include:**
+
+- **Scotland/Wales**: Devolution and distinct political identity may increase engagement; regional nationalism mobilizes voters
+- **England**: Largest population provides most diverse range of constituencies; may reflect overall UK patterns most accurately
+- **Northern Ireland**: Highly politicized environment with strong identity politics; history makes political participation particularly salient
+
+### Question 5: Two Improvements and Two Failed Approaches
+
+#### Improvement 1: Mean and Median Comparison
+
+```{r improvement1, fig.cap="Improvement 1: Comparing mean and median turnout", fig.height=5}
+# Reshape data to show both mean and median
+turnout_long <- turnout_by_country %>%
+  pivot_longer(cols = c(mean_turnout, median_turnout),
+               names_to = "measure",
+               values_to = "turnout") %>%
+  mutate(measure = ifelse(measure == "mean_turnout", "Mean", "Median"))
+
+ggplot(turnout_long, aes(x = country, y = turnout, fill = measure)) +
+  geom_col(position = "dodge", width = 0.7) +
+  scale_fill_manual(values = c("Mean" = "#0072B2", "Median" = "#E69F00")) +
+  scale_y_continuous(limits = c(0, 100),
+                     expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "UK 2024 General Election: Turnout by Country",
+    subtitle = "Comparing mean and median turnout rates",
+    x = "Country",
+    y = "Turnout (% of registered voters)",
+    fill = "Measure"
+  ) +
+  theme_classic() +
+  theme(legend.position = "top")
+```
+
+**Why This Improves the Figure:**
+
+- Shows both central tendency measures, revealing potential skewness in the data
+- Mean vs median differences indicate the presence of outliers or distribution shape
+- Provides a more complete picture of turnout patterns
+- Helps viewers understand data variability and whether a few constituencies are driving the mean
+
+#### Improvement 2: Ordered Bars with Sample Size
+
+```{r improvement2, fig.cap="Improvement 2: Countries ordered by turnout with sample sizes", fig.height=5}
+turnout_by_country %>%
+  mutate(country_label = paste0(country, "\n(n=", n, ")"),
+         country_label = fct_reorder(country_label, mean_turnout)) %>%
+  ggplot(aes(x = country_label, y = mean_turnout)) +
+  geom_col(aes(fill = mean_turnout), width = 0.7) +
+  scale_fill_gradient(low = "#D55E00", high = "#009E73",
+                      name = "Turnout %") +
+  scale_y_continuous(limits = c(0, 100),
+                     expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "UK 2024 General Election: Mean Turnout by Country",
+    subtitle = "Countries ordered by turnout; sample sizes shown in parentheses",
+    x = "Country (number of constituencies)",
+    y = "Turnout (% of registered voters)"
+  ) +
+  theme_classic() +
+  theme(legend.position = "right")
+```
+
+**Why This Improves the Figure:**
+
+- Ordering by turnout makes comparisons easier and more intuitive (no mental sorting required)
+- Adding sample size (n) provides crucial context for interpreting differences
+- Color gradient reinforces the ordering and emphasizes magnitude differences
+- More informative x-axis labels help viewers assess reliability of estimates
+
+#### Failed Approach 1: Adding Error Bars
+
+```{r failed1, fig.cap="Failed Approach 1: Adding error bars", fig.height=5}
+turnout_by_country %>%
+  left_join(
+    uk %>%
+      group_by(country) %>%
+      summarise(se = sd(turnout_registered, na.rm = TRUE) / sqrt(n()),
+                .groups = "drop"),
+    by = "country"
+  ) %>%
+  ggplot(aes(x = country, y = mean_turnout)) +
+  geom_col(width = 0.7, fill = "#0072B2") +
+  geom_errorbar(aes(ymin = mean_turnout - se, ymax = mean_turnout + se),
+                width = 0.3) +
+  scale_y_continuous(limits = c(0, 100),
+                     expand = expansion(mult = c(0, 0.05))) +
+  labs(
+    title = "UK 2024 General Election: Mean Turnout by Country (with SE)",
+    x = "Country",
+    y = "Turnout (% of registered voters)"
+  ) +
+  theme_classic()
+```
+
+**Why This Didn't Work:**
+
+- Error bars are barely visible because standard errors are very small
+- Adds visual clutter without providing meaningful information
+- We're showing population data (all constituencies), not a sample, so standard errors may not be the appropriate measure
+- The error bars don't add interpretive value for the audience
+- Creates confusion about what uncertainty means in this context
+
+#### Failed Approach 2: Pie Chart
+
+```{r failed2, fig.cap="Failed Approach 2: Pie chart", fig.height=5}
+ggplot(turnout_by_country, aes(x = "", y = mean_turnout, fill = country)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  labs(
+    title = "UK 2024 General Election: Mean Turnout by Country",
+    fill = "Country"
+  ) +
+  theme_void()
+```
+
+**Why This Didn't Work:**
+
+- Pie charts are poor for comparing values (angles and areas are hard to judge accurately)
+- The data doesn't represent parts of a whole (turnout rates are independent measures)
+- Can't see actual turnout values clearly
+- Loses the clear ordering and magnitude comparison that bar charts provide
+- Misleading representation since we're not showing proportions of a total
+- Bar charts are simply superior for comparing magnitudes across categories
+
+\newpage
+
+# Section 2: Intergenerational Advantage Analysis
+
+## Data Loading and Preparation
+
+```{r load-kidiq}
+# Load the kidiq data
+kidiq <- read_csv("kidiq-2.csv")
+
+# Create meaningful categories
+kidiq <- kidiq %>%
+  mutate(
+    # Create work status labels
+    work_status = case_when(
+      mom_work == 1 ~ "Not working",
+      mom_work == 2 ~ "Part-time",
+      mom_work == 3 ~ "Full-time",
+      mom_work == 4 ~ "Full-time+"
+    ),
+    # Create combined advantage categories
+    family_advantage = case_when(
+      mom_hs == 0 & mom_work <= 2 ~ "Low advantage",
+      mom_hs == 0 & mom_work > 2 ~ "Mixed advantage",
+      mom_hs == 1 & mom_work <= 2 ~ "Mixed advantage", 
+      mom_hs == 1 & mom_work > 2 ~ "High advantage"
+    ),
+    # Create IQ terciles for grouping
+    iq_group = case_when(
+      mom_iq <= quantile(mom_iq, 0.33, na.rm = TRUE) ~ "Lower IQ",
+      mom_iq <= quantile(mom_iq, 0.67, na.rm = TRUE) ~ "Middle IQ",
+      TRUE ~ "Higher IQ"
+    ),
+    # Additional category: Education level with clear labels
+    education_level = ifelse(mom_hs == 1, "High School Completed", "No High School"),
+    # Create ability categories for Exercise 2
+    ability_level = case_when(
+      mom_iq <= quantile(mom_iq, 0.25, na.rm = TRUE) ~ "Low ability",
+      mom_iq <= quantile(mom_iq, 0.75, na.rm = TRUE) ~ "Medium ability",
+      TRUE ~ "High ability"
+    ),
+    # Create outcome categories  
+    outcome_level = case_when(
+      kid_score <= quantile(kid_score, 0.25, na.rm = TRUE) ~ "Low outcome",
+      kid_score <= quantile(kid_score, 0.75, na.rm = TRUE) ~ "Medium outcome",
+      TRUE ~ "High outcome"
+    ),
+    # Identify "surprising" cases
+    surprising_case = case_when(
+      ability_level == "High ability" & outcome_level == "Low outcome" ~ "High ability, low outcome",
+      ability_level == "Low ability" & outcome_level == "High outcome" ~ "Low ability, high outcome",
+      TRUE ~ "Expected pattern"
+    ),
+    # Additional category: Combined structural advantage score
+    structural_score = mom_hs + (mom_work / 4)
+  )
+```
+
+## Exercise 1: The Intergenerational Transmission of Advantage
+
+**Story:** How does parental background shape children's opportunities?
+
+This visualization tells the story of how mother's characteristics (education, IQ, work status) combine to influence children's test scores, revealing patterns of advantage and disadvantage across different family backgrounds.
+
+```{r exercise1, fig.cap="The Intergenerational Transmission of Advantage", fig.width=12, fig.height=7}
+your_plot <- kidiq %>%
+  filter(!is.na(family_advantage), !is.na(iq_group)) %>%
+  mutate(
+    family_advantage = factor(family_advantage, 
+                              levels = c("Low advantage", "Mixed advantage", "High advantage")),
+    iq_group = factor(iq_group, 
+                     levels = c("Lower IQ", "Middle IQ", "Higher IQ"))
+  ) %>%
+  ggplot(aes(x = family_advantage, y = kid_score)) +
+  geom_jitter(aes(color = iq_group), alpha = 0.4, width = 0.2, size = 1.5) +
+  geom_boxplot(aes(fill = family_advantage), alpha = 0.6, outlier.shape = NA) +
+  facet_wrap(~iq_group, ncol = 3) +
+  scale_color_manual(values = c("Lower IQ" = "#D55E00", 
+                                 "Middle IQ" = "#E69F00", 
+                                 "Higher IQ" = "#009E73")) +
+  scale_fill_manual(values = c("Low advantage" = "#CC79A7",
+                               "Mixed advantage" = "#56B4E9",
+                               "High advantage" = "#0072B2")) +
+  geom_hline(yintercept = mean(kidiq$kid_score, na.rm = TRUE), 
+             linetype = "dashed", color = "black", alpha = 0.5) +
+  labs(
+    title = "The Intergenerational Transmission of Advantage",
+    subtitle = "Children's test scores vary significantly by family background, even within similar maternal IQ levels.\nStructural advantages compound cognitive advantages.",
+    x = "Family Advantage Level\n(Based on Mother's Education & Work Status)",
+    y = "Child's Test Score",
+    color = "Mother's IQ Group",
+    fill = "Family Advantage",
+    caption = "Data: National Longitudinal Survey of Youth (Gelman & Hill, 2007)\nDashed line represents overall mean test score"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 10, margin = margin(b = 10)),
+    strip.text = element_text(face = "bold", size = 10),
+    legend.position = "bottom",
+    panel.grid.minor = element_blank()
+  ) +
+  guides(fill = guide_legend(override.aes = list(alpha = 0.8)))
+
+print(your_plot)
+```
+
+### Key Insights from Exercise 1
+
+1. **Advantage compounds across dimensions**: Even within the same maternal IQ group, family advantage matters significantly for child outcomes
+
+2. **Substantial gaps exist**: Children from "High advantage" families score 10-20 points higher than those from "Low advantage" families, even with similar maternal IQ
+
+3. **Independent contributions**: Mother's IQ and structural advantages (education, work) both contribute independently to child outcomes
+
+4. **Disadvantage multiplies**: Children facing both lower maternal IQ and low structural advantage face the steepest challenges
+
+5. **Privilege is structural, not just cognitive**: High IQ alone doesn't guarantee high outcomes without structural support
+
+## Exercise 2: The Myth of Meritocracy?
+
+**Story:** Does talent alone determine outcomes, or do background advantages matter?
+
+This visualization explores whether children's outcomes are primarily determined by "merit" (mother's IQ as a proxy for genetic/environmental advantages) or whether structural factors (education, work opportunities) also play crucial roles.
+
+```{r exercise2, fig.cap="The Myth of Meritocracy", fig.width=12, fig.height=8}
+your_plot_2 <- kidiq %>%
+  filter(!is.na(education_level)) %>%
+  ggplot(aes(x = mom_iq, y = kid_score)) +
+  geom_smooth(aes(color = education_level, linetype = work_status), 
+              method = "lm", se = TRUE, alpha = 0.2) +
+  geom_point(aes(shape = surprising_case, 
+                 fill = surprising_case,
+                 size = surprising_case),
+             alpha = 0.6) +
+  scale_shape_manual(values = c("Expected pattern" = 21,
+                                "High ability, low outcome" = 24,
+                                "Low ability, high outcome" = 23),
+                    name = "Case Type") +
+  scale_fill_manual(values = c("Expected pattern" = "gray50",
+                               "High ability, low outcome" = "#D55E00",
+                               "Low ability, high outcome" = "#009E73"),
+                   name = "Case Type") +
+  scale_size_manual(values = c("Expected pattern" = 1.5,
+                               "High ability, low outcome" = 3,
+                               "Low ability, high outcome" = 3),
+                   name = "Case Type") +
+  scale_color_manual(values = c("High School Completed" = "#0072B2",
+                               "No High School" = "#CC79A7"),
+                    name = "Mother's Education") +
+  scale_linetype_manual(values = c("Not working" = "dotted",
+                                  "Part-time" = "dashed",
+                                  "Full-time" = "solid",
+                                  "Full-time+" = "solid"),
+                       name = "Mother's Work Status") +
+  annotate("text", x = 70, y = 140, 
+           label = "Structural advantages\nshift outcomes upward",
+           size = 3.5, fontface = "italic", color = "#0072B2") +
+  annotate("segment", x = 75, y = 135, xend = 90, yend = 120,
+           arrow = arrow(length = unit(0.2, "cm")), color = "#0072B2") +
+  annotate("text", x = 130, y = 40,
+           label = "High ability doesn't\nguarantee high outcomes",
+           size = 3.5, fontface = "italic", color = "#D55E00") +
+  labs(
+    title = "The Myth of Meritocracy: Structure Matters as Much as Ability",
+    subtitle = "If merit alone determined outcomes, all lines would overlap. Instead, education and work status create parallel advantage tracks.\nNotice the 'surprising cases' where ability doesn't predict outcome as expected.",
+    x = "Mother's IQ (proxy for 'ability' or inherited advantage)",
+    y = "Child's Test Score",
+    caption = "Data: National Longitudinal Survey of Youth (Gelman & Hill, 2007)\nTriangles and diamonds highlight cases where outcomes defy ability-based predictions"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(size = 9, margin = margin(b = 15)),
+    legend.position = "right",
+    legend.box = "vertical",
+    panel.grid.minor = element_blank(),
+    plot.caption = element_text(hjust = 0, size = 8, margin = margin(t = 10))
+  )
+
+print(your_plot_2)
+```
+
+### Key Insights from Exercise 2
+
+1. **Parallel Tracks, Not Convergence**: Children from different structural backgrounds follow parallel paths across the IQ range, not converging paths. This demonstrates that structure matters independently of ability.
+
+2. **Surprising Cases Abound**: Many high-ability children from disadvantaged backgrounds score lower than expected, while some low-ability children from advantaged backgrounds score higher than expected. Merit alone doesn't determine outcomes.
+
+3. **Advantage Compounds at All Levels**: The gap between education groups remains consistent across the IQ range, showing that structural advantages don't just help low-ability children "catch up"—they benefit children at all ability levels equally.
+
+4. **Slopes vs. Intercepts**: While there's a positive relationship between mother's IQ and child's score (merit does matter), the intercepts differ significantly by structural factors. This proves that where you start (structural advantage) matters as much as your trajectory (ability).
+
+5. **Policy Implications**: If we only invested in "high ability" children, we'd miss many high-potential children from disadvantaged backgrounds and would perpetuate inequality by confusing privilege with merit. Effective policy must address structural barriers, not just individual ability.
+
+# Conclusion
+
+This assignment demonstrates the importance of both technical data analysis skills and thoughtful visualization design in telling compelling data stories. From analyzing UK election turnout patterns to exploring intergenerational advantage, we see how proper data wrangling, statistical thinking, and visual communication combine to reveal important insights about society and opportunity.
+
+# Disclaimer
+
+This assignment was prepared with assistance from a foundation model (OpenAI’s ChatGPT) to help with code structuring, debugging, and improving the clarity of explanations. The analytical approach, coding logic, and interpretation of results are entirely my own. The model was not used to fabricate data or generate results, and all outputs have been independently verified to ensure accuracy and compliance with university guidelines

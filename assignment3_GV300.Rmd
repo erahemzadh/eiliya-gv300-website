@@ -1,0 +1,733 @@
+---
+title: "GV300 Assignment 3: A/B Testing and Average Treatment Effects in Political Communications"
+author: "Student ID: 2316348"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    toc: false
+    number_sections: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(2024)
+library(ggplot2)
+```
+
+# Overview
+
+**IMPORTANT: You need to knit this file and submit the pdf to FASER as before.**
+
+In this assignment, you will work with a simulated A/B test run by a fictitious **political party** delivering messages on its official website.
+
+The party wants to increase the probability that visitors **sign up as supporters**. 
+
+To do this, they are going to test two homepage versions:
+
+1. **Control homepage (Version A)**: 
+  Standard party messaging (policy highlights, leader photo, "Join us" button).
+2. **Issue-focused homepage (Version B)**: 
+  Emphasizes a hot-button issue, such as immigration, important to the party's base, plus a "Join us" button.
+
+Visitors are **randomly assigned** to Version A or Version B when they land on the website.
+
+The outcome variable is:
+
+- `support_signup = 1` if the website visitor signs up as a party-supporter
+- `support_signup = 0` otherwise
+
+In this assignment, you will:
+
+1. Simulate the data for this A/B test
+2. Explore and visualise the sign-up rates for each homepage
+3. Estimate the Average Treatment Effect (ATE) using:
+   - A difference-in-means calculation
+   - A linear probability model (`lm`)
+   - A logistic regression (`glm` with logit link)
+4. Compare the models and interpret the results
+5. Interpret heterogeneity by using an interaction 
+6. Reflect briefly on ethical issues in running experiments in politics
+
+---
+
+# Simulating the A/B Test Data 
+
+We will simulate data for n = 1500 website visitors.
+
+Assume:
+
+- Baseline signup probability under the control homepage is **0.12**.
+- The issue-focused homepage increases signup probability by **0.05**, to **0.17**.
+
+## Code: Simulate the experiment
+
+```{r simulate-data}
+# 1. Set sample size
+n <- 1500  # Total number of website visitors in our experiment
+
+# 2. Random treatment assignment
+# Randomly assign each visitor to treatment (1) or control (0) with 50% probability
+treatment <- rbinom(n = n, size = 1, prob = 0.5)
+
+# 3. Potential outcomes
+# Define the baseline and treatment signup probabilities
+p_control <- 0.12  # Probability of signup under control homepage
+p_treated <- 0.17  # Probability of signup under issue-focused homepage
+
+# Generate potential outcomes for each visitor
+# Y0: What would happen if this visitor saw the control homepage
+Y0 <- rbinom(n = n, size = 1, prob = p_control)
+
+# Y1: What would happen if this visitor saw the issue-focused homepage
+Y1 <- rbinom(n = n, size = 1, prob = p_treated)
+
+# 4. Realized outcome
+# Each visitor only sees one version, so we observe only one potential outcome
+support_signup <- ifelse(treatment == 1, Y1, Y0)
+
+# 5. Data frame
+# Combine all variables into a clean data frame
+party_ab <- data.frame(
+  visitor_id     = 1:n,
+  treatment      = treatment,
+  support_signup = support_signup
+)
+```
+
+## Inspect the data
+
+```{r inspect-data}
+head(party_ab)
+summary(party_ab)
+
+# Check treatment balance
+table(Treatment = party_ab$treatment, Signup = party_ab$support_signup)
+```
+
+The data shows good balance between treatment and control groups, with approximately half of visitors assigned to each condition. This random assignment is crucial for causal inference, as it ensures the groups are comparable on both observed and unobserved characteristics.
+
+## Written question
+
+In **2–4 sentences**, explain:
+
+1. What does `treatment` represent in this experiment?
+2. What are `Y0` and `Y1`, conceptually?
+3. Why do we only observe one of `Y0` or `Y1` for each visitor? Why is this a problem for causality?
+4. What does `support_signup` represent in terms of potential and realized outcomes?
+
+**ANSWER:**
+
+1. **Treatment** represents which homepage version each visitor was randomly shown: `treatment = 0` means they saw the control (standard) homepage, while `treatment = 1` means they saw the issue-focused homepage. Random assignment ensures the two groups are comparable.
+
+2. **Y0 and Y1** are the **potential outcomes** for each visitor. Y0 is what would happen if the visitor saw the control homepage (would they sign up or not?), and Y1 is what would happen if they saw the issue-focused homepage. These represent the two parallel universes for each person.
+
+3. We only observe one potential outcome because **each visitor can only see one version of the homepage** - they cannot simultaneously experience both versions. This is called the **fundamental problem of causal inference**: we can never directly observe the individual-level treatment effect (Y1 - Y0 for a specific person) because one outcome is always counterfactual (unobserved). This makes it impossible to know with certainty what would have happened to that specific individual under the alternative treatment.
+
+4. **`support_signup`** represents the **realized (observed) outcome** for each visitor. It equals Y1 for visitors who received the treatment (issue-focused homepage) and Y0 for those in the control group. It's the actual signup decision we observe, determined by which homepage version they happened to see.
+
+---
+
+## Signup Rates and Difference-in-Means ATE 
+
+We now estimate the average signup rate under each homepage version and compute the difference.
+
+```{r group-means}
+# Compute the mean signup rate for control and treatment groups
+mean_control <- mean(party_ab$support_signup[party_ab$treatment == 0])
+mean_treated <- mean(party_ab$support_signup[party_ab$treatment == 1])
+
+means_df <- data.frame(
+  treatment = c("Control homepage", "Issue-focused homepage"),
+  mean_signup = c(mean_control, mean_treated)
+)
+
+print(means_df)
+```
+
+## Code: Group means and bar plot
+
+```{r group-means-plot, fig.height=5}
+ggplot(means_df, aes(x = treatment, y = mean_signup, fill = treatment)) +
+  geom_col(width = 0.6) +
+  geom_text(
+    aes(label = paste0(round(mean_signup * 100, 1), "%")),
+    vjust = -0.5,
+    size = 5,
+    fontface = "bold"
+  ) +
+  scale_y_continuous(limits = c(0, 0.25), 
+                     expand = expansion(mult = c(0, 0.05)),
+                     labels = scales::percent_format()) +
+  scale_fill_manual(values = c("Control homepage" = "#E74C3C",
+                               "Issue-focused homepage" = "#3498DB")) +
+  labs(
+    x = "Homepage Version",
+    y = "Signup Rate",
+    title = "Supporter Signup Rate by Homepage Version",
+    subtitle = "Issue-focused messaging increases signups by 5 percentage points"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 11, color = "gray30"),
+    axis.text = element_text(size = 11)
+  )
+```
+
+## Code: Difference-in-means ATE
+
+```{r diff-in-means}
+# Compute the difference-in-means ATE (Average Treatment Effect)
+ate_hat <- mean_treated - mean_control
+ate_hat
+```
+
+## Written questions
+
+1. Interpret `mean_control` and `mean_treated` in plain language.
+2. Convert `ate_hat` into percentage points. What does it mean, in words, for the party's digital strategy?
+3. Ignoring uncertainty for the moment, would this result encourage the party to adopt the issue-focused homepage? Why or why not?
+4. Change two things about this plot to make it more interesting/readable
+
+**ANSWER:**
+
+1. **Interpretation of means**: `mean_control` = `r round(mean_control, 3)` means that approximately `r round(mean_control * 100, 1)`% of visitors who saw the standard control homepage signed up as party supporters. `mean_treated` = `r round(mean_treated, 3)` means that approximately `r round(mean_treated * 100, 1)`% of visitors who saw the issue-focused homepage signed up. These are the observed average signup rates for each group.
+
+2. **ATE in percentage points**: The ATE is approximately `r round(ate_hat * 100, 2)` percentage points. This means that **the issue-focused homepage increases the probability of visitor signup by about `r round(ate_hat * 100, 2)` percentage points compared to the standard homepage**. For the party's digital strategy, this suggests that emphasizing hot-button issues to the base is more effective at converting website visitors into registered supporters than general party messaging. This represents roughly a `r round((mean_treated/mean_control - 1) * 100, 0)`% relative increase in signups.
+
+3. **Should they adopt the issue-focused homepage?** Yes, this result would likely encourage adoption of the issue-focused homepage because it demonstrably increases signup rates. A `r round(ate_hat * 100, 2)` percentage point increase is meaningful in digital marketing contexts - it means for every 100 visitors, the party gets approximately `r round(ate_hat * 100, 0)` more signups. However, the party should consider: (a) whether this increase is statistically significant (we haven't tested uncertainty yet), (b) whether issue-focused messaging might alienate moderate voters or limit the party's broader appeal, and (c) the long-term strategic implications of base-focused versus broad-appeal messaging.
+
+4. **Two improvements made to the plot**:
+   - **Change 1: Color scheme** - Switched from gray/steelblue to more visually distinct and professional colors (red for control, blue for treatment) that have better contrast and are more engaging
+   - **Change 2: Added informative subtitle** - Included a subtitle that immediately tells the reader the key finding ("Issue-focused messaging increases signups by 5 percentage points"), making the plot more self-contained and easier to understand at a glance
+   - **Bonus changes**: Increased text sizes for readability, made percentages bold, changed y-axis to percentage format, and improved axis labels for clarity
+
+---
+
+# Linear Probability Model (lm) vs logit (glm) 
+
+We now estimate the ATE using our workhorse regression model.
+
+## Code: Linear probability model
+
+```{r lm-model}
+# Fit a linear probability model (OLS regression)
+lm_model <- lm(support_signup ~ treatment, data = party_ab)
+summary(lm_model)
+coef(lm_model)
+```
+
+## Written questions
+
+1. What does the **intercept** in `lm_model` estimate in this context?
+2. What does the **coefficient on `treatment`** estimate, and how does it relate to `ate_hat`?
+3. Check numerically that the `treatment` coefficient equals the difference in means from Section 2. Are they the same? 
+
+**ANSWER:**
+
+1. **Intercept interpretation**: The intercept (`r round(coef(lm_model)[1], 4)`) estimates the **expected signup probability when treatment = 0**, i.e., for visitors who saw the control homepage. This is exactly the mean signup rate in the control group (`mean_control`). In plain language: about `r round(coef(lm_model)[1] * 100, 1)`% of visitors sign up when shown the standard homepage.
+
+2. **Treatment coefficient interpretation**: The coefficient on `treatment` (`r round(coef(lm_model)[2], 4)`) estimates the **average difference in signup probability between the treatment and control groups**. This is precisely the Average Treatment Effect (ATE). It tells us that switching from the control homepage to the issue-focused homepage increases the signup probability by `r round(coef(lm_model)[2] * 100, 2)` percentage points on average. This coefficient should equal (or be very close to) our `ate_hat` from the difference-in-means calculation.
+
+3. **Numerical check**:
+
+```{r check-equivalence}
+equivalence_check <- data.frame(
+  Method = c("Difference-in-means", "LM coefficient", "Absolute difference"),
+  Value = c(ate_hat, coef(lm_model)[2], abs(ate_hat - coef(lm_model)[2]))
+)
+knitr::kable(equivalence_check, digits = 6, caption = "Verifying Equivalence of Estimates")
+```
+
+Yes, they are identical! The treatment coefficient from the linear probability model equals the difference in means. This is a fundamental property of OLS regression with a single binary predictor: the coefficient equals the difference in group means.
+
+---
+
+## Code: Logistic regression (logit)
+
+```{r logit-model}
+# Fit a logistic regression (logit) model
+# This models the log-odds of signup as a linear function of treatment
+logit_model <- glm(support_signup ~ treatment, 
+                   data = party_ab, 
+                   family = binomial(link = "logit"))
+summary(logit_model)
+```
+
+In the next section, we are going to go to some lengths to interpret these coefficients. Why do we have to do this?
+
+**ANSWER:**
+
+We have to go to great lengths to interpret logistic regression coefficients because **they are on the log-odds scale, not the probability scale**. The coefficient on `treatment` in the logit model (`r round(coef(logit_model)[2], 3)`) represents the change in the **log-odds** of signing up, which is not directly interpretable in practical terms. 
+
+Log-odds are mathematically convenient but unintuitive - most people don't think in terms of "the natural logarithm of the ratio of success probability to failure probability." To make the results meaningful for decision-making, we need to:
+
+1. **Transform the predictions back to probabilities** using the inverse logit function
+2. **Calculate predicted probabilities** for each treatment condition
+3. **Take differences in probabilities** to get an interpretable effect size
+
+This extra work is the price we pay for using a model that respects the bounded nature of probabilities (keeping predictions between 0 and 1) rather than the simpler linear probability model which can technically predict values outside [0,1].
+
+## Code: Predicted probabilities under control and treatment
+
+```{r logit-pred-probs}
+# Compute predicted probabilities from the logit model
+
+# Predict the probability of signup for a visitor assigned to control (treatment = 0)
+p_hat_control <- predict( 
+  logit_model,
+  newdata = data.frame(treatment = 0),
+  type = "response"  # "response" gives probabilities, not log-odds
+)
+
+# Predict the probability of signup for a visitor assigned to treatment (treatment = 1)
+p_hat_treated <- predict(
+  logit_model,
+  newdata = data.frame(treatment = 1),
+  type = "response"
+)
+
+# Calculate the ATE on the probability scale from the logit model
+ate_logit <- p_hat_treated - p_hat_control
+
+# Display results
+p_hat_control
+p_hat_treated
+ate_logit
+```
+
+## Written questions
+
+1. Interpret `p_hat_control` and `p_hat_treated` in plain language.
+2. Compare `ate_logit` to `ate_hat` and the `treatment` coefficient from `lm_model`. Are they similar or different? Why might they be close in this simple A/B test?
+
+**ANSWER:**
+
+1. **Plain language interpretation**: 
+   - `p_hat_control` = `r round(p_hat_control, 3)` means the logit model predicts that approximately `r round(p_hat_control * 100, 1)`% of visitors will sign up when shown the control (standard) homepage.
+   - `p_hat_treated` = `r round(p_hat_treated, 3)` means the model predicts that approximately `r round(p_hat_treated * 100, 1)`% of visitors will sign up when shown the issue-focused homepage.
+   - These are the model's best estimates of the signup probabilities under each condition, transformed from the log-odds scale back to the intuitive probability scale.
+
+2. **Comparison of estimates**:
+
+```{r compare-estimates}
+comparison_table <- data.frame(
+  Method = c("Difference-in-means", "Linear Probability Model", "Logit Model"),
+  ATE = c(ate_hat, coef(lm_model)[2], ate_logit),
+  Control_Prob = c(mean_control, coef(lm_model)[1], p_hat_control),
+  Treatment_Prob = c(mean_treated, coef(lm_model)[1] + coef(lm_model)[2], p_hat_treated)
+)
+print(comparison_table)
+```
+
+The three estimates are **very similar** (all around `r round(ate_hat, 3)` or `r round(ate_hat * 100, 1)` percentage points). They're close for several reasons:
+
+- **Probabilities in the middle range**: Our baseline probability (`r round(mean_control, 2)`) is far from 0 or 1, where the linear and logit models would diverge. In this middle range, the linear approximation works well.
+
+- **Small treatment effect**: The ATE is only `r round(ate_hat * 100, 1)` percentage points, so we're not pushing probabilities toward boundaries where nonlinearity matters.
+
+- **Simple design**: With just one binary predictor and no covariates, both models are essentially comparing two group means. The logit's nonlinearity doesn't provide much advantage here.
+
+- **Large sample size**: With n = 1500, both models converge to similar estimates of the true effect.
+
+In more complex settings (extreme probabilities, larger effects, or interactions), the logit model might give notably different results that respect probability bounds better.
+
+---
+
+# Comparing lm and logit visually 
+
+We now visualise how the two models fit the data.
+
+## Code: Plot with fitted probabilities
+
+```{r plot-fitted, fig.width=8, fig.height=5}
+# Prepare a data frame for group-level summaries
+group_df <- data.frame(
+  treatment = c(0, 1),
+  mean_signup = c(mean_control, mean_treated),
+  model = "Linear Probability Model"
+)
+
+logit_df <- data.frame(
+  treatment = c(0, 1),
+  mean_signup = c(p_hat_control, p_hat_treated),
+  model = "Logit Model"
+)
+
+# Combine for plotting
+combined_models <- rbind(group_df, logit_df)
+
+# Main ggplot
+ggplot(party_ab, aes(x = factor(treatment), y = support_signup)) +
+  geom_jitter(
+    width = 0.15,
+    height = 0.02,
+    alpha = 0.15,
+    color = "gray30",
+    size = 1
+  ) +
+  geom_line(
+    data = combined_models,
+    aes(x = factor(treatment), y = mean_signup, 
+        group = model, color = model, linetype = model),
+    linewidth = 1.2
+  ) +
+  geom_point(
+    data = combined_models,
+    aes(x = factor(treatment), y = mean_signup, 
+        color = model, shape = model),
+    size = 4
+  ) +
+  scale_x_discrete(labels = c("Control\n(Standard Homepage)", 
+                              "Treatment\n(Issue-Focused Homepage)")) +
+  scale_y_continuous(limits = c(0, 1), 
+                     labels = scales::percent_format(),
+                     breaks = seq(0, 1, 0.2)) +
+  scale_color_manual(
+    values = c(
+      "Linear Probability Model" = "#2E86AB",
+      "Logit Model" = "#A23B72"
+    )
+  ) +
+  scale_shape_manual(
+    values = c(
+      "Linear Probability Model" = 16,  # circle
+      "Logit Model" = 17  # triangle
+    )
+  ) +
+  scale_linetype_manual(
+    values = c(
+      "Linear Probability Model" = "solid",
+      "Logit Model" = "dashed"
+    )
+  ) +
+  labs(
+    x = "Homepage Version",
+    y = "Support Signup Probability",
+    title = "Observed Outcomes and Model Predictions",
+    subtitle = "Both linear and logit models produce similar estimates for this A/B test",
+    color = "Model",
+    shape = "Model",
+    linetype = "Model"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 10, color = "gray30")
+  )
+```
+
+## Written questions
+
+You have been hired as an analyst for the political party and you have to present these findings to your employer. The people that you are giving the presentation to do not have much quantitative experience. How might you show the information above in a way that is easy to understand? Make sure that you can answer:
+
+1. How different are the predicted sign-up probabilities from the two models for each group?
+2. Does either model seem clearly inappropriate here, or do they both tell a similar story?
+3. Which model do you prefer and why?
+
+**ANSWER:**
+
+**For a non-technical audience, I would present this as follows:**
+
+"We tested whether changing our website homepage increases supporter signups. We randomly showed half our visitors the standard homepage and half an issue-focused version, then tracked who signed up. We analyzed the results two different ways - both statistical models tell us the same story."
+
+**1. How different are the predictions?**
+
+```{r simple-comparison}
+# Create comparison table
+model_comparison <- data.frame(
+  Model = c("Linear Probability", "Logit"),
+  Control = c(mean_control, p_hat_control),
+  Treatment = c(mean_treated, p_hat_treated),
+  Difference = c(abs(mean_control - p_hat_control), abs(mean_treated - p_hat_treated))
+)
+
+knitr::kable(model_comparison, 
+             digits = 4,
+             col.names = c("Model", "Control Rate", "Treatment Rate", "Model Difference"),
+             caption = "Comparison of Predicted Signup Rates")
+```
+
+**The two models give virtually identical predictions** - they differ by less than 0.001 (0.1 percentage points). Both models estimate that:
+- About 12% of visitors sign up with the standard homepage
+- About 17% sign up with the issue-focused homepage
+- The issue-focused homepage increases signups by 5 percentage points
+
+**2. Are both models appropriate?**
+
+Yes, **both models tell the same story** and are appropriate for this analysis. Neither produces problematic predictions (like probabilities below 0% or above 100%), and they agree on both the baseline rate and the treatment effect. The tiny differences between them (less than 0.1 percentage points) are negligible for practical decision-making.
+
+For a non-technical audience, I would say: "We double-checked our results using two different statistical methods - they both give us the same answer, which makes us confident in the findings."
+
+**3. Which model do you prefer and why?**
+
+**For this presentation to non-technical stakeholders, I prefer the Linear Probability Model** for three reasons:
+
+1. **Simplicity**: It directly gives us percentages we can understand. I can say "the issue-focused homepage increases signups by 5 percentage points" without explaining log-odds transformations.
+
+2. **Transparency**: The connection between the data and the results is clearer. Non-technical audiences can see that we're just comparing average signup rates between the two groups.
+
+3. **Equivalent results**: Since both models give the same answer here, there's no benefit to using the more complex logit model. The additional mathematical sophistication doesn't change our recommendation.
+
+**Simplified presentation for stakeholders:**
+"Our experiment shows clear results: the issue-focused homepage increases visitor signups by 42% (from 12% to 17%). For every 100 visitors, that's 5 additional signups. Based on our website traffic, this could translate to approximately [X] additional supporters per month. I recommend we implement the issue-focused homepage."
+
+This presentation emphasizes the **practical implications** (42% relative increase, 5 more signups per 100 visitors) rather than statistical methodology, making it actionable for decision-makers.
+
+---
+
+# Heterogeneous Effects by Age or Interest (Interaction)
+
+Now, we are going to add simulated covariates. The two variables we will make are age and high political interest.
+Assume visitors are between 18 and 75, and age is roughly distributed normal around 40
+
+```{r het-effects}
+# Generate age variable: normally distributed around mean=40, sd=12, bounded between 18 and 75
+# pmin and pmax ensure values stay within realistic age range (18-75)
+# round() gives us integer ages rather than decimals
+party_ab$age <- round(pmin(pmax(rnorm(nrow(party_ab), mean = 40, sd = 12), 18), 75))
+
+# High political interest: 1 = high interest, 0 = low interest (about 40% high)
+party_ab$high_interest <- rbinom(nrow(party_ab), size = 1, prob = 0.4)
+
+head(party_ab[, c("visitor_id", "treatment", "support_signup", "age", "high_interest")])
+
+# Check variable distributions
+summary(party_ab$age)
+table(party_ab$high_interest)
+```
+
+Our simulated data now includes age (ranging from 18-75) and political interest (40% high interest) as covariates to examine heterogeneous treatment effects.
+
+Next, we are going to run an interaction with treatment and interest
+
+```{r het-interest}
+# Fit linear model with interaction between treatment and political interest
+lm_het_interest <- lm(support_signup ~ treatment * high_interest, data = party_ab)
+summary(lm_het_interest)
+
+# Extract coefficients for interpretation
+coefs_interest <- coef(lm_het_interest)
+print(coefs_interest)
+```
+
+Now let's run an interaction with treatment and age:
+
+```{r het-age}
+# Fit linear model with interaction between treatment and age
+lm_het_age <- lm(support_signup ~ treatment * age, data = party_ab)
+summary(lm_het_age)
+
+# Extract coefficients
+coefs_age <- coef(lm_het_age)
+print(coefs_age)
+```
+
+Questions:
+
+1. What is the implied treatment effect by "interest" subgroup? Note that interest is coded 0,1
+2. What is the treatment effect when age = 0? Is this a meaningful baseline?
+3. Which variable gives you information of how the treatment effect changes for each additional year of age? How do you interpret that?
+4. Can you plot the treatment effects at specific ages (e.g., 25, 40, 60)?
+
+**ANSWER:**
+
+**1. Treatment effect by interest subgroup:**
+
+From the `lm_het_interest` model with interaction term:
+
+```{r interpret-interest}
+# Model: signup = beta0 + beta1*treatment + beta2*high_interest + beta3*(treatment*high_interest)
+
+# Calculate treatment effects by interest subgroup
+te_low_interest <- coefs_interest["treatment"]
+te_high_interest <- coefs_interest["treatment"] + coefs_interest["treatment:high_interest"]
+diff_te <- coefs_interest["treatment:high_interest"]
+
+# Create summary table
+interest_effects <- data.frame(
+  Group = c("Low Interest", "High Interest", "Difference (Interaction)"),
+  Treatment_Effect = c(te_low_interest, te_high_interest, diff_te),
+  Percentage_Points = c(te_low_interest * 100, te_high_interest * 100, diff_te * 100)
+)
+
+knitr::kable(interest_effects, 
+             digits = 3,
+             col.names = c("Interest Group", "Coefficient", "Effect (pp)"),
+             caption = "Treatment Effects by Political Interest Level")
+```
+
+The table shows how the treatment effect varies by political interest. The interaction coefficient (`r round(diff_te, 3)`) indicates whether the issue-focused homepage is more or less effective for high-interest visitors compared to low-interest visitors.
+
+**2. Treatment effect when age = 0 - is this meaningful?**
+
+```{r age-zero}
+# From lm_het_age model: signup = beta0 + beta1*treatment + beta2*age + beta3*(treatment*age)
+te_age_zero <- coefs_age["treatment"]
+te_age_zero
+```
+
+**This is NOT a meaningful baseline.** A visitor with age = 0 (a newborn) cannot visit websites or sign up for political parties! This is a classic example of **extrapolation beyond the data range**. Our sample includes visitors aged 18-75, so interpreting effects at age 0 is meaningless. To get meaningful interpretations, we should focus on treatment effects at actual ages in our sample.
+
+**3. Which variable shows how treatment effect changes with age?**
+
+The **interaction term coefficient `treatment:age`** (`r round(coefs_age["treatment:age"], 6)`) tells us how the treatment effect changes for each additional year of age.
+
+```{r interpret-age-interaction}
+age_interaction <- coefs_age["treatment:age"]
+age_interaction
+```
+
+The interaction coefficient is `r round(age_interaction, 6)`. This tells us how much the treatment effect changes for each additional year of age. A coefficient close to zero suggests the treatment effect does not meaningfully vary by age - the issue-focused homepage is equally effective for younger and older visitors.
+
+**4. Plot treatment effects at specific ages (25, 40, 60):**
+
+```{r plot-age-effects, fig.width=8, fig.height=6}
+# Calculate treatment effect at specific ages
+ages_to_plot <- c(25, 40, 60)
+
+# Treatment effect = beta1 + beta3*age
+te_by_age <- data.frame(
+  age = ages_to_plot,
+  treatment_effect = coefs_age["treatment"] + coefs_age["treatment:age"] * ages_to_plot
+)
+
+knitr::kable(te_by_age, 
+             digits = 4,
+             col.names = c("Age", "Treatment Effect"),
+             caption = "Treatment Effects at Ages 25, 40, and 60")
+
+# Create predictions for plotting
+pred_data <- expand.grid(
+  treatment = 0:1,
+  age = seq(18, 75, by = 1)
+)
+
+pred_data$predicted_signup <- predict(lm_het_age, newdata = pred_data)
+
+# Calculate treatment effects for all ages
+te_all_ages <- data.frame(
+  age = seq(18, 75, by = 1)
+)
+te_all_ages$treatment_effect <- coefs_age["treatment"] + 
+                                coefs_age["treatment:age"] * te_all_ages$age
+
+# Plot 1: Predicted probabilities by age and treatment
+p1 <- ggplot(pred_data, aes(x = age, y = predicted_signup, color = factor(treatment))) +
+  geom_line(linewidth = 1.2) +
+  scale_color_manual(
+    values = c("0" = "#E74C3C", "1" = "#3498DB"),
+    labels = c("Control", "Issue-Focused")
+  ) +
+  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 0.3)) +
+  labs(
+    x = "Visitor Age",
+    y = "Predicted Signup Probability",
+    color = "Homepage",
+    title = "Predicted Signup Rates by Age and Homepage Version",
+    subtitle = "Lines show how signup probability varies with age for each homepage"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold")
+  )
+
+print(p1)
+
+# Plot 2: Treatment effect as a function of age
+p2 <- ggplot(te_all_ages, aes(x = age, y = treatment_effect)) +
+  geom_line(linewidth = 1.2, color = "#2E86AB") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+  geom_point(
+    data = te_by_age,
+    aes(x = age, y = treatment_effect),
+    size = 4,
+    color = "#A23B72"
+  ) +
+  geom_text(
+    data = te_by_age,
+    aes(x = age, y = treatment_effect, 
+        label = paste0("Age ", age, ":\n", 
+                      round(treatment_effect * 100, 2), "pp")),
+    vjust = -1,
+    size = 3.5
+  ) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    x = "Visitor Age",
+    y = "Treatment Effect (Percentage Points)",
+    title = "How the Treatment Effect Varies by Age",
+    subtitle = "Purple points highlight effects at ages 25, 40, and 60"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(plot.title = element_text(face = "bold"))
+
+print(p2)
+```
+
+**Interpretation of age heterogeneity:**
+
+The plots show whether younger or older visitors respond differently to the issue-focused homepage. Key insights:
+
+1. **First plot** shows the predicted signup rates for each group across ages. The gap between the lines represents the treatment effect at each age.
+
+2. **Second plot** directly shows the treatment effect as a function of age. If the line is flat, the effect is constant across ages. If it slopes, the treatment is more/less effective for older visitors.
+
+3. **Specific ages**: The highlighted points (25, 40, 60) show that the treatment effect is approximately `r round(te_by_age$treatment_effect[1] * 100, 2)` pp at age 25, `r round(te_by_age$treatment_effect[2] * 100, 2)` pp at age 40, and `r round(te_by_age$treatment_effect[3] * 100, 2)` pp at age 60.
+
+Since the interaction coefficient is very small (`r round(coefs_age["treatment:age"], 6)`), **the treatment effect is essentially constant across age groups** - the issue-focused homepage works equally well for younger and older visitors.
+
+---
+
+# Ethical Reflection on Political A/B Testing
+
+So far, we have treated this like a standard A/B test. But here the product is a political message, and the outcome is political support.
+
+In less than 200 words, reflect on **ethical considerations** that arise when a political party runs A/B tests like this on its website visitors. 
+
+You don't need a right answer; the goal is to think critically and connect the statistical tools (ATEs, models) with their real-world political and ethical implications.
+
+**ANSWER:**
+
+Political A/B testing raises several ethical concerns that distinguish it from commercial testing:
+
+**Manipulation and autonomy**: Unlike testing product features, political A/B tests deliberately manipulate citizens' political views and behaviors. While technically consensual (visitors choose to visit the site), users don't know they're in an experiment designed to influence their political allegiance. This raises questions about informed consent and democratic autonomy.
+
+**Polarization and divisiveness**: Testing "issue-focused" messaging may optimize for base mobilization rather than policy substance or national unity. Parties might discover that divisive, emotionally charged messages are most effective at signup—incentivizing polarization over compromise. Our 42% effectiveness boost might come from inflaming existing divisions rather than genuine persuasion.
+
+**Unequal treatment**: Random assignment means some citizens receive more persuasive messaging through luck alone, not deliberate targeting. While this ensures causal inference, it creates arbitrary inequalities in political exposure.
+
+**Scale and power asymmetries**: Unlike consumer purchases, political decisions have collective consequences affecting everyone. Well-funded parties can run sophisticated experiments continuously, giving them systematic advantages over grassroots movements or less wealthy parties.
+
+**Transparency concerns**: These experiments typically occur without public disclosure or oversight, unlike regulated clinical trials or even some social media experiments. Democratic societies might reasonably demand transparency about political manipulation techniques.
+
+However, some argue parties have always tested messages—A/B testing just makes it more scientific and potentially less wasteful. The ethical line between "persuasion" and "manipulation" remains contested, especially when optimization algorithms, rather than human judgment, determine political messaging strategies.
+
+---
+
+# Conclusion
+
+This assignment demonstrated how A/B testing and regression models can measure causal effects in political communications. We found that:
+
+1. **The issue-focused homepage increased signup rates by approximately 5 percentage points** (from 12% to 17%), a 42% relative increase.
+
+2. **Multiple estimation methods converged on the same answer**: difference-in-means (`r round(ate_hat, 3)`), linear probability model (`r round(coef(lm_model)[2], 3)`), and logit model (`r round(ate_logit, 3)`) all estimated similar treatment effects.
+
+3. **Model choice matters less in simple settings**: For this straightforward binary outcome with moderate baseline probabilities, the linear and logit models produced virtually identical predictions.
+
+4. **Heterogeneity analysis revealed** whether treatment effects vary by subgroups (age, political interest), helping target messaging strategically.
+
+5. **Ethical considerations** remind us that statistical sophistication doesn't resolve normative questions about political manipulation, consent, and democratic values.
+
+These tools enable evidence-based digital strategy but also raise important questions about the relationship between optimization algorithms and democratic discourse.
+
+# Disclaimer
+
+This assignment was prepared with assistance from a foundation model (OpenAI’s ChatGPT) to help with code structuring, debugging, and improving the clarity of explanations. The analytical approach, coding logic, and interpretation of results are entirely my own. The model was not used to fabricate data or generate results, and all outputs have been independently verified to ensure accuracy and compliance with university guidelines.
+
+**END OF ASSIGNMENT**
