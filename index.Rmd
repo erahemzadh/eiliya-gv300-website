@@ -2,50 +2,36 @@
 title: "Eiliya Rahemzadh"
 links:
   - label: LinkedIn
-    url: "www.linkedin.com/in/eiliya-rahemzadh-222867206"
+    url: "https://www.linkedin.com/in/eiliya-rahemzadh-222867206"
   - label: GitHub
     url: "https://github.com/erahemzadh"
   - label: Email
-    url: "er23255@essex.ac.uk"
+    url: "mailto:er23255@essex.ac.uk"
   - label: GV300 Showcase
     url: "gv300-showcase.html"
 output:
   postcards::trestles
-site: distill::distill_website
 ---
-
-## Welcome!
-
-I'm a student at The University of Essex, currently studying Economics and Politics. I'm passionate about data analysis, visualization, and using evidence to understand political and social phenomena.
 
 ## About Me
 
-I'm particularly interested in:
+I'm a student at the **University of Essex** studying **Economics and Politics**. I'm passionate about using quantitative methods and data visualization to understand political and social phenomena.
 
-- **Data visualization** and communicating insights through graphics
-- **Causal inference** and experimental design
-- **Political science** and quantitative research methods
-- **R programming** and reproducible research
+## Academic Interests
 
-## My Work
+- **Electoral participation** and voter turnout patterns
+- **Causal inference** in political science
+- **Experimental design** and A/B testing
+- **Data visualization** and communicating statistical findings
 
-On this site, you'll find examples of my analytical work, particularly from my GV300 course where I've developed skills in:
+## GV300 Portfolio
 
-- Data wrangling and cleaning with `tidyverse`
-- Creating publication-quality visualizations with `ggplot2`
-- Statistical modeling and causal inference
-- A/B testing and experimental analysis
+This website showcases my work from **GV300 Research Methods**, where I've developed skills in data wrangling, statistical modeling, and reproducible research with R.
 
-Check out my [**GV300 Showcase**](gv300-showcase.html) to see my best work from the course!
+**[View My GV300 Showcase →](gv300-showcase.html)**
 
 ## Education
 
-**[The University of Essex]**  
-*[Economics and Politics Bsc (Honours)]*  
-Expected graduation: [2026]
-
-Relevant coursework: Research Methods, Data Analysis, Statistics, Political Science
-
----
-
-*This website was built using [Distill](https://rstudio.github.io/distill/) and [Postcards](https://github.com/seankross/postcards) in R.*
+**University of Essex**  
+BSc Economics and Politics  
+Expected Graduation: 2026
