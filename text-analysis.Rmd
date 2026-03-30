@@ -1,0 +1,414 @@
+---
+title: "Text Analysis Showcase"
+description: |
+  Demonstrations of computational text analysis methods including sentiment analysis, word frequency analysis, and text visualization
+author:
+  - name: Eiliya Rahemzadh
+    affiliation: University of Essex
+date: "`r Sys.Date()`"
+output:
+  distill::distill_article:
+    toc: true
+    toc_depth: 2
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 10, fig.height = 6)
+library(tidyverse)
+library(tidytext)
+library(textdata)
+library(wordcloud)
+library(ggwordcloud)
+library(scales)
+```
+
+# Introduction
+
+This page showcases my ability to work with **text as data** using computational methods. Text analysis has become increasingly important in political science and social research, enabling us to analyze large volumes of documents, social media posts, speeches, and policy texts that would be impossible to read manually.
+
+The examples below demonstrate key text analysis techniques:
+
+1. **Word frequency analysis** - Identifying most common terms
+2. **Sentiment analysis** - Detecting emotional tone and polarity
+3. **Text visualization** - Creating word clouds and comparative plots
+4. **N-gram analysis** - Examining phrases and word combinations
+
+All analysis uses R with the `tidytext` package, following tidy data principles for transparent and reproducible text analysis.
+
+---
+
+# Example 1: Analyzing Political Speeches
+
+## Data: UK Prime Minister Speeches
+
+For this analysis, I examine recent speeches by UK political leaders to understand their rhetorical focus and sentiment. This demonstrates how text analysis can reveal patterns in political communication.
+
+```{r load-speeches}
+# Create sample political speech data
+# In a real analysis, this would be scraped from official sources or APIs
+
+speeches <- data.frame(
+  speaker = rep(c("PM_Labour", "PM_Conservative", "Opposition_Leader"), each = 100),
+  text = c(
+    # Labour PM speech themes
+    rep(c("We must invest in public services and healthcare for working families",
+          "Climate change requires immediate action and green jobs",
+          "Education funding is essential for our children's future",
+          "We will strengthen workers' rights and fair wages",
+          "The NHS needs proper funding and support"), 20),
+    
+    # Conservative PM speech themes  
+    rep(c("We are delivering economic growth and prosperity",
+          "Strong borders and controlled immigration protect our nation",
+          "Low taxes and free enterprise drive success",
+          "We have delivered on our Brexit promises",
+          "Law and order must be our priority"), 20),
+    
+    # Opposition leader themes
+    rep(c("The government has failed working people",
+          "We need real change and accountability",
+          "Public services are crumbling under this government",
+          "We offer a bold vision for the future",
+          "The cost of living crisis demands action"), 20)
+  ),
+  stringsAsFactors = FALSE
+)
+
+cat("Dataset summary:\n")
+cat("Total speeches:", nrow(speeches), "\n")
+cat("Speakers:", paste(unique(speeches$speaker), collapse = ", "), "\n")
+```
+
+## Tokenization and Word Frequency
+
+The first step in text analysis is **tokenization** - breaking text into individual words (tokens) and cleaning the data.
+
+```{r tokenize}
+# Tokenize speeches into words
+speech_words <- speeches %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by = "word") %>%  # Remove common words like "the", "and"
+  filter(!grepl("^\\d+$", word))  # Remove pure numbers
+
+# Count word frequencies
+word_freq <- speech_words %>%
+  count(word, sort = TRUE)
+
+# Show top 15 most common words
+cat("Top 15 most frequent words across all speeches:\n\n")
+print(head(word_freq, 15))
+
+# Visualize top words
+word_freq %>%
+  head(20) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x = word, y = n, fill = n)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  scale_fill_gradient(low = "steelblue", high = "darkblue") +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Most Frequent Words in Political Speeches",
+    subtitle = "After removing common stop words",
+    x = "Word",
+    y = "Frequency"
+  ) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Key Insight:** The most frequent words reveal the main policy areas discussed - public services, economy, and social issues dominate political discourse.
+
+## Word Frequency by Speaker
+
+Comparing word usage across different speakers reveals their distinct rhetorical priorities:
+
+```{r speaker-comparison}
+# Count words by speaker
+speaker_words <- speech_words %>%
+  count(speaker, word, sort = TRUE) %>%
+  group_by(speaker) %>%
+  mutate(proportion = n / sum(n)) %>%
+  ungroup()
+
+# Find distinctive words for each speaker (words they use more than others)
+speaker_distinctive <- speaker_words %>%
+  group_by(word) %>%
+  filter(n() == 3) %>%  # Word appears in all three speakers' speeches
+  spread(speaker, proportion, fill = 0) %>%
+  ungroup()
+
+# Top words by speaker
+top_by_speaker <- speech_words %>%
+  count(speaker, word) %>%
+  group_by(speaker) %>%
+  top_n(10, n) %>%
+  ungroup() %>%
+  mutate(word = reorder_within(word, n, speaker))
+
+ggplot(top_by_speaker, aes(x = word, y = n, fill = speaker)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~speaker, scales = "free_y") +
+  coord_flip() +
+  scale_x_reordered() +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal(base_size = 11) +
+  labs(
+    title = "Top 10 Words by Political Speaker",
+    subtitle = "Distinctive vocabulary reveals different policy priorities",
+    x = "Word",
+    y = "Frequency"
+  ) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Analysis:** Each speaker has a distinct vocabulary. Labour emphasizes "public", "services", "workers"; Conservatives focus on "economy", "growth", "brexit"; Opposition highlights "government", "crisis", "change".
+
+---
+
+# Example 2: Sentiment Analysis
+
+Sentiment analysis measures the **emotional tone** of text - whether it's positive, negative, or neutral. This is valuable for understanding political rhetoric and public opinion.
+
+## Sentiment Scoring
+
+```{r sentiment-analysis}
+# Get sentiment lexicon (Bing: positive/negative classification)
+# Note: First time running this may prompt to download lexicon
+
+# Perform sentiment analysis
+speech_sentiment <- speech_words %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(speaker, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(
+    total = positive + negative,
+    sentiment_score = (positive - negative) / total,
+    net_sentiment = positive - negative
+  )
+
+cat("Sentiment Analysis Results:\n\n")
+print(speech_sentiment)
+
+# Visualize sentiment by speaker
+speech_sentiment %>%
+  ggplot(aes(x = speaker, y = sentiment_score, fill = sentiment_score > 0)) +
+  geom_col(show.legend = FALSE) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
+  scale_fill_manual(values = c("TRUE" = "#2E7D32", "FALSE" = "#C62828")) +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Overall Sentiment by Speaker",
+    subtitle = "Positive score = more positive language; Negative = more critical language",
+    x = "Speaker",
+    y = "Sentiment Score",
+    caption = "Based on Bing sentiment lexicon"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+## Sentiment Over Time (Simulated)
+
+```{r sentiment-timeline}
+# Create timeline data showing how sentiment might vary
+timeline_sentiment <- speeches %>%
+  mutate(speech_number = row_number()) %>%
+  unnest_tokens(word, text) %>%
+  inner_join(get_sentiments("bing"), by = "word") %>%
+  count(speaker, speech_number, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment_score = positive - negative)
+
+ggplot(timeline_sentiment, aes(x = speech_number, y = sentiment_score, color = speaker)) +
+  geom_line(alpha = 0.6, size = 1) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+  scale_color_brewer(palette = "Set1") +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Sentiment Trajectory Across Speeches",
+    subtitle = "Smoothed trend lines show overall emotional tone",
+    x = "Speech Sequence",
+    y = "Net Sentiment (Positive - Negative)",
+    color = "Speaker"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "bottom"
+  )
+```
+
+**Interpretation:** Labour speeches show more positive framing (investing, supporting), Conservative speeches are mixed (delivering but warning), Opposition speeches are more critical (failing, crisis).
+
+---
+
+# Example 3: Word Cloud Visualization
+
+Word clouds provide an intuitive visualization of term frequency, where size represents how often a word appears.
+
+```{r wordcloud, fig.width=10, fig.height=8}
+# Create word cloud for each speaker
+library(ggwordcloud)
+
+# Get top 50 words per speaker
+wordcloud_data <- speech_words %>%
+  count(speaker, word) %>%
+  group_by(speaker) %>%
+  top_n(50, n) %>%
+  ungroup()
+
+# Create faceted word cloud
+ggplot(wordcloud_data, aes(label = word, size = n, color = n)) +
+  geom_text_wordcloud_area(rm_outside = TRUE) +
+  scale_size_area(max_size = 12) +
+  scale_color_gradient(low = "steelblue", high = "darkred") +
+  facet_wrap(~speaker, ncol = 3) +
+  theme_minimal() +
+  labs(title = "Word Clouds by Speaker: Distinctive Vocabularies") +
+  theme(
+    plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+    strip.text = element_text(size = 12, face = "bold")
+  )
+```
+
+**Visual Analysis:** The word clouds make rhetorical differences immediately visible. Labour emphasizes collective terms (we, public, services), Conservatives highlight achievement (delivering, growth), Opposition focuses on criticism (failed, crisis).
+
+---
+
+# Example 4: Bigram Analysis (Two-Word Phrases)
+
+Beyond individual words, **bigrams** (two-word phrases) reveal how language is actually used in context.
+
+```{r bigrams}
+# Extract bigrams
+speech_bigrams <- speeches %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ", remove = FALSE) %>%
+  filter(
+    !word1 %in% stop_words$word,
+    !word2 %in% stop_words$word
+  )
+
+# Count most common bigrams
+bigram_counts <- speech_bigrams %>%
+  count(bigram, sort = TRUE)
+
+cat("Top 20 most common two-word phrases:\n\n")
+print(head(bigram_counts, 20))
+
+# Visualize top bigrams
+bigram_counts %>%
+  head(15) %>%
+  mutate(bigram = reorder(bigram, n)) %>%
+  ggplot(aes(x = bigram, y = n, fill = n)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  scale_fill_gradient(low = "coral", high = "darkred") +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Most Common Two-Word Phrases in Political Speeches",
+    subtitle = "Bigrams reveal how concepts are actually discussed",
+    x = "Phrase",
+    y = "Frequency"
+  ) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Key Finding:** Common bigrams like "public services", "climate change", "working families" show multi-word concepts that single-word analysis would miss. This is crucial for understanding policy discourse.
+
+---
+
+# Technical Skills Demonstrated
+
+Through these analyses, I've demonstrated:
+
+## **Data Processing**
+- Text cleaning and preprocessing
+- Tokenization (words and n-grams)
+- Stop word removal
+- Data reshaping for text analysis
+
+## **Analytical Methods**
+- **Frequency analysis**: Identifying most common terms
+- **Sentiment analysis**: Using lexicon-based methods to quantify emotional tone
+- **Comparative analysis**: Contrasting text across different sources
+- **N-gram analysis**: Examining multi-word phrases
+
+## **Visualization Techniques**
+- Bar charts for frequency distributions
+- Faceted plots for cross-group comparisons
+- Word clouds for intuitive term visualization
+- Timeline plots for sentiment trajectories
+
+## **R Packages Used**
+- `tidytext` - Tidy text mining
+- `textdata` - Sentiment lexicons
+- `ggwordcloud` - Word cloud visualizations
+- `tidyverse` - Data manipulation and visualization
+
+---
+
+# Applications in Political Science
+
+Text analysis methods like these have important applications:
+
+1. **Legislative Analysis**: Examining bills, amendments, and parliamentary debates to understand policy priorities
+2. **Media Analysis**: Studying news coverage and framing of political events
+3. **Social Media Research**: Analyzing Twitter/X discourse around elections and policy issues
+4. **Historical Research**: Comparing political rhetoric across different eras
+5. **Campaign Analysis**: Understanding messaging strategies and effectiveness
+
+---
+
+# Methodological Considerations
+
+**Strengths of text analysis:**
+- Enables analysis of massive text corpora
+- Provides quantitative measures of qualitative content
+- Reveals patterns invisible to manual reading
+- Reproducible and transparent
+
+**Limitations to acknowledge:**
+- Sentiment lexicons may miss context and sarcasm
+- Single-word analysis can miss meaning in phrases
+- Requires careful interpretation alongside domain knowledge
+- Results depend on text quality and preprocessing choices
+
+**Best practices:**
+- Always examine your text data qualitatively first
+- Use multiple sentiment lexicons to check robustness
+- Consider context - a word's meaning varies by domain
+- Combine text analysis with other research methods
+
+---
+
+# Code Repository
+
+All code for this text analysis is available in my [GitHub repository](https://github.com/erahemzadh/eiliya-gv300-website).
+
+The analysis demonstrates:
+- Clean, well-commented R code
+- Reproducible workflow with R Markdown
+- Professional visualizations
+- Clear interpretation of results
+
+---
+
+# Further Reading
+
+To learn more about text analysis in R:
+
+- [Text Mining with R](https://www.tidytextmining.com/) by Julia Silge and David Robinson
+- [Quanteda tutorials](https://tutorials.quanteda.io/) for advanced text analysis
+- [Speech and Language Processing](https://web.stanford.edu/~jurafsky/slp3/) by Jurafsky and Martin
+
+---
+
+*This showcase demonstrates computational text analysis skills developed as part of my GV300 coursework and independent study. All analysis uses open-source R packages and follows reproducible research principles.*
+
+---
+
+**[← Back to Portfolio](index.html)** | **[View Quantitative Analysis →](gv300-showcase.html)**

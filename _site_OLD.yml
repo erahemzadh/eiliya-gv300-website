@@ -1,7 +1,7 @@
 name: "eiliya-gv300-website"
 title: "Eiliya Rahemzadh"
 description: |
-  Personal website showcasing quantitative analysis and computational text methods
+  Personal website showcasing my work in data analysis and visualization
 base_url: https://erahemzadh.github.io/eiliya-gv300-website
 output_dir: "docs"
 navbar:
@@ -12,5 +12,3 @@ navbar:
       href: about.html
     - text: "GV300 Showcase"
       href: gv300-showcase.html
-    - text: "Text Analysis"
-      href: text-analysis.html

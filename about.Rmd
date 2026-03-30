@@ -54,7 +54,7 @@ Visit my [**GV300 Showcase**](gv300-showcase.html) to see examples of my analyti
 Feel free to reach out if you'd like to discuss research, data analysis, or potential collaborations:
 
 - **Email**: er23255@essex.ac.uk
-- **GitHub**: (https://github.com/erahemzadh)
+- **GitHub**: https://github.com/erahemzadh
 - **LinkedIn**: https://www.linkedin.com/in/eiliya-rahemzadh-222867206
 ---
 

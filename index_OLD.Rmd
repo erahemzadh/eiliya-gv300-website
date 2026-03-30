@@ -1,0 +1,37 @@
+---
+title: "Eiliya Rahemzadh"
+links:
+  - label: LinkedIn
+    url: "https://www.linkedin.com/in/eiliya-rahemzadh-222867206"
+  - label: GitHub
+    url: "https://github.com/erahemzadh"
+  - label: Email
+    url: "mailto:er23255@essex.ac.uk"
+  - label: GV300 Showcase
+    url: "gv300-showcase.html"
+output:
+  postcards::trestles
+---
+
+## About Me
+
+I'm a student at the **University of Essex** studying **Economics and Politics**. I'm passionate about using quantitative methods and data visualization to understand political and social phenomena.
+
+## Academic Interests
+
+- **Electoral participation** and voter turnout patterns
+- **Causal inference** in political science
+- **Experimental design** and A/B testing
+- **Data visualization** and communicating statistical findings
+
+## GV300 Portfolio
+
+This website showcases my work from **GV300 Research Methods**, where I've developed skills in data wrangling, statistical modeling, and reproducible research with R.
+
+**[View My GV300 Showcase →](gv300-showcase.html)**
+
+## Education
+
+**University of Essex**  
+BSc Economics and Politics  
+Expected Graduation: 2026

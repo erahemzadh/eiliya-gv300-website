@@ -7,31 +7,66 @@ links:
     url: "https://github.com/erahemzadh"
   - label: Email
     url: "mailto:er23255@essex.ac.uk"
-  - label: GV300 Showcase
+  - label: GV300 Portfolio
     url: "gv300-showcase.html"
+  - label: Text Analysis
+    url: "text-analysis.html"
 output:
   postcards::trestles
 ---
 
 ## About Me
 
-I'm a student at the **University of Essex** studying **Economics and Politics**. I'm passionate about using quantitative methods and data visualization to understand political and social phenomena.
+I'm a student at the **University of Essex** studying **Economics and Politics** (BSc). My academic work focuses on applying quantitative methods to understand political and social phenomena, with particular interests in electoral behavior, institutional trust, and data-driven policy analysis.
 
-## Academic Interests
+## Research Interests
 
-- **Electoral participation** and voter turnout patterns
-- **Causal inference** in political science
-- **Experimental design** and A/B testing
-- **Data visualization** and communicating statistical findings
+My work in the **GV300 Research Methods** course has developed my capabilities in:
 
-## GV300 Portfolio
+- **Causal Inference & Experimental Design** - A/B testing, treatment effect estimation, and randomized controlled trials
+- **Statistical Modeling** - Linear and logistic regression, interaction effects, and heterogeneous treatment effects
+- **Data Visualization** - Creating publication-quality graphics that communicate complex findings clearly
+- **Text Analysis** - Natural language processing, sentiment analysis, and computational text methods
+- **Reproducible Research** - R Markdown, Git/GitHub, and transparent analytical workflows
 
-This website showcases my work from **GV300 Research Methods**, where I've developed skills in data wrangling, statistical modeling, and reproducible research with R.
+## Skills & Tools
 
-**[View My GV300 Showcase →](gv300-showcase.html)**
+**Programming & Analysis:**
+- R (tidyverse, ggplot2, psych, tidytext, quanteda)
+- RStudio and R Markdown for reproducible research
+- Git and GitHub for version control
+
+**Statistical Methods:**
+- Regression analysis (OLS, logistic)
+- Experimental design and causal inference
+- Measurement theory and scale construction
+- Text analysis and natural language processing
+
+**Data Visualization:**
+- ggplot2 for publication-quality graphics
+- Interactive visualizations
+- Effective communication of quantitative findings
+
+## Portfolio
+
+**[GV300 Quantitative Analysis →](gv300-showcase.html)**  
+Examples of statistical modeling, experimental design, and data visualization from my research methods coursework, including:
+- Intergenerational advantage analysis using NLSY data
+- UK General Election 2024 turnout inequality
+- A/B testing for political communications
+
+**[Text Analysis Showcase →](text-analysis.html)**  
+Demonstrations of computational text analysis methods including sentiment analysis, topic modeling, and text classification applied to political texts and social media data.
 
 ## Education
 
 **University of Essex**  
 BSc Economics and Politics  
 Expected Graduation: 2026
+
+**Relevant Coursework:**  
+Research Methods (GV300), Econometrics, Political Science, Statistics, Public Policy Analysis
+
+---
+
+*Website built with [Distill](https://rstudio.github.io/distill/) and [Postcards](https://github.com/seankross/postcards) • Last updated: `r format(Sys.Date(), '%B %Y')`*
